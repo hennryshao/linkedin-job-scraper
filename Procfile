@@ -1,2 +1,3 @@
-web: gunicorn linkedin_scraper:app
+web: python linkedin_scraper.py
+
 
