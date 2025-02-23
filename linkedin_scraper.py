@@ -17,6 +17,7 @@ CORS(app)  # Enable CORS for all routes
 LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL", "henryshao2020@gmail.com")
 LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD", "10shaoyan-")
 API_KEY = os.getenv("API_KEY", str(uuid.uuid4()))  # Generate a random API key if not set
+print(f"当前 API Key: {API_KEY}")  # 打印 API Key 用于调试
 
 # Rate limiting configuration
 MAX_REQUESTS_PER_HOUR = 10
@@ -156,11 +157,8 @@ def scrape():
 
 @app.route('/get-api-key', methods=['GET'])
 def get_api_key():
-    if request.remote_addr != '127.0.0.1':
-        return jsonify({"error": "This endpoint is only available locally"}), 403
     return jsonify({"api_key": API_KEY})
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5000))
-    print(f" API Key: {API_KEY}")  # Print API key on startup
     app.run(host="0.0.0.0", port=port, debug=False)
