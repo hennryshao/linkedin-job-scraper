@@ -1,10 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-import undetected_chromedriver as uc
+from playwright.sync_api import sync_playwright
 import time
 import os
 import uuid
@@ -42,74 +38,68 @@ def check_rate_limit(api_key):
     request_history[api_key].append(now)
     return True
 
-def get_chrome_options():
-    """Configure ChromeDriver with enhanced stability"""
-    chrome_options = uc.ChromeOptions()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    
-    # Additional options for Render deployment
-    if os.getenv("RENDER"):
-        chrome_options.binary_location = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
-    
-    return chrome_options
-
 def login_linkedin():
-    """Login to LinkedIn and return the logged-in WebDriver"""
+    """Login to LinkedIn and return the browser context"""
     try:
-        chrome_options = get_chrome_options()
-        driver = uc.Chrome(options=chrome_options)
-        driver.get("https://www.linkedin.com/login")
+        playwright = sync_playwright().start()
+        browser = playwright.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--window-size=1920,1080"
+            ]
+        )
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36"
+        )
+        page = context.new_page()
         
-        time.sleep(3)  # Wait for page load
-
-        # Enter email
-        email_input = driver.find_element(By.ID, "username")
-        email_input.send_keys(LINKEDIN_EMAIL)
-
-        # Enter password
-        password_input = driver.find_element(By.ID, "password")
-        password_input.send_keys(LINKEDIN_PASSWORD)
-        password_input.send_keys(Keys.RETURN)
-
-        time.sleep(5)  # Wait for redirect
-        return driver
+        # Navigate to LinkedIn login page
+        page.goto("https://www.linkedin.com/login")
+        page.fill("#username", LINKEDIN_EMAIL)
+        page.fill("#password", LINKEDIN_PASSWORD)
+        page.click("button[type=submit]")
+        
+        # Wait for navigation
+        page.wait_for_selector("nav.global-nav", timeout=15000)
+        
+        return {"playwright": playwright, "browser": browser, "page": page}
     except Exception as e:
         print(f"LinkedIn login failed: {e}")
-        if 'driver' in locals():
-            driver.quit()
+        if 'browser' in locals():
+            browser.close()
+        if 'playwright' in locals():
+            playwright.stop()
         return None
 
 def scrape_jobs(job_title, location):
     """Scrape job information from LinkedIn"""
-    driver = login_linkedin()
-    if driver is None:
+    browser_ctx = login_linkedin()
+    if browser_ctx is None:
         return {"error": "Login failed, cannot scrape jobs"}
 
     try:
+        page = browser_ctx["page"]
         search_url = f"https://www.linkedin.com/jobs/search?keywords={job_title}&location={location}&f_E=1"
-        driver.get(search_url)
-
-        time.sleep(5)  # Wait for content to load
+        page.goto(search_url)
+        page.wait_for_selector(".jobs-search__results-list", timeout=10000)
 
         jobs = []
-        job_cards = driver.find_elements(By.CLASS_NAME, "base-card")
+        job_cards = page.query_selector_all(".jobs-search__results-list li")
 
         for job in job_cards[:5]:  # Only scrape first 5 jobs
             try:
-                title = job.find_element(By.CLASS_NAME, "base-card__full-link").text
-                company = job.find_element(By.CLASS_NAME, "base-search-card__subtitle").text
-                location = job.find_element(By.CLASS_NAME, "job-search-card__location").text
-                link = job.find_element(By.CLASS_NAME, "base-card__full-link").get_attribute("href")
+                title_elem = job.query_selector(".base-card__full-link")
+                company_elem = job.query_selector(".base-search-card__subtitle")
+                location_elem = job.query_selector(".job-search-card__location")
 
                 jobs.append({
-                    "title": title,
-                    "company": company,
-                    "location": location,
-                    "link": link
+                    "title": title_elem.inner_text() if title_elem else "N/A",
+                    "company": company_elem.inner_text() if company_elem else "N/A",
+                    "location": location_elem.inner_text() if location_elem else "N/A",
+                    "link": title_elem.get_attribute("href") if title_elem else "#"
                 })
             except Exception as e:
                 print(f"Skipping job due to error: {e}")
@@ -120,8 +110,9 @@ def scrape_jobs(job_title, location):
         print(f"Scraping failed: {e}")
         return {"error": "Scraping failed due to unexpected error"}
     finally:
-        if driver:
-            driver.quit()  # Ensure browser is always closed
+        if browser_ctx:
+            browser_ctx["browser"].close()
+            browser_ctx["playwright"].stop()
 
 @app.route('/')
 def home():

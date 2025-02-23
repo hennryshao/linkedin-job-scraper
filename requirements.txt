@@ -2,6 +2,4 @@ Flask==2.0.1
 Werkzeug==2.0.3
 flask-cors==4.0.0
 gunicorn==20.1.0
-selenium==4.15.2
-undetected-chromedriver==3.5.4
-webdriver-manager==4.0.1
+playwright==1.40.0
