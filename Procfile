@@ -1,4 +1,4 @@
-web: gunicorn linkedin_scraper:application
+web: gunicorn linkedin_scraper:app
 
 
 
