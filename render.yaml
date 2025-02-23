@@ -4,13 +4,18 @@ services:
     env: python
     buildCommand: |
       pip install -r requirements.txt
-      playwright install chromium
-      playwright install-deps chromium
+      playwright install
+      playwright install-deps
     startCommand: gunicorn app:app
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: API_KEY
         value: linkedin-scraper-2025
+        sync: false
       - key: LINKEDIN_EMAIL
         value: henryshao2020@gmail.com
+        sync: false  
       - key: LINKEDIN_PASSWORD
         value: 10shaoyan-
+        sync: false
