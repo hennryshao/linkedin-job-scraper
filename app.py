@@ -4,7 +4,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+import undetected_chromedriver as uc
 import time
 import os
 import uuid
@@ -44,16 +44,12 @@ def check_rate_limit(api_key):
 
 def get_chrome_options():
     """Configure ChromeDriver with enhanced stability"""
-    chrome_options = webdriver.ChromeOptions()
+    chrome_options = uc.ChromeOptions()
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--remote-debugging-port=9222")
     chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    chrome_options.add_experimental_option("useAutomationExtension", False)
     
     # Additional options for Render deployment
     if os.getenv("RENDER"):
@@ -64,8 +60,8 @@ def get_chrome_options():
 def login_linkedin():
     """Login to LinkedIn and return the logged-in WebDriver"""
     try:
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=get_chrome_options())
+        chrome_options = get_chrome_options()
+        driver = uc.Chrome(options=chrome_options)
         driver.get("https://www.linkedin.com/login")
         
         time.sleep(3)  # Wait for page load
